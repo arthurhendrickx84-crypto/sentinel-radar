@@ -1,0 +1,45 @@
+{
+  "app": {
+    "debug": true,
+    "log_level": "INFO",
+    "country": "nl"
+  },
+  "sdr": {
+    "sample_rate": 2400000,
+    "gain": "auto",
+    "ppm_error": 0,
+    "bandwidth": 2500000
+  },
+  "alerts": {
+    "distance_threshold_m": 500,
+    "distance_levels": [
+      { "distance_m": 500, "indicators": 1, "sound": false },
+      { "distance_m": 400, "indicators": 2, "sound": false },
+      { "distance_m": 300, "indicators": 3, "sound": false },
+      { "distance_m": 200, "indicators": 4, "sound": false },
+      { "distance_m": 100, "indicators": 5, "sound": false },
+      { "distance_m": 20, "indicators": 6, "sound": true }
+    ]
+  },
+  "display": {
+    "type": "terminal",
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "spi_port": 0,
+    "spi_device": 0,
+    "i2c_address": "0x27"
+  },
+  "camera": {
+    "device_id": 0,
+    "width": 640,
+    "height": 480,
+    "fps": 30,
+    "motion_threshold": 25
+  },
+  "sound": {
+    "enabled": true,
+    "alert_file": "data/sounds/alert.wav",
+    "volume": 0.8
+  }
+}

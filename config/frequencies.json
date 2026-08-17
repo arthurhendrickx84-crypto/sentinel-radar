@@ -1,0 +1,65 @@
+{
+  "countries": {
+    "nl": {
+      "name": "Netherlands",
+      "frequencies": [
+        {
+          "name": "Police DMR Tier III",
+          "center_freq": 414000000,
+          "bandwidth": 25000,
+          "mode": "DMR"
+        },
+        {
+          "name": "Police P25/Tetra",
+          "center_freq": 420000000,
+          "bandwidth": 25000,
+          "mode": "P25"
+        },
+        {
+          "name": "PMR446 (Public Mobile Radio)",
+          "center_freq": 446500000,
+          "bandwidth": 12500,
+          "mode": "FM"
+        }
+      ],
+      "tx_power_dbm": 30,
+      "path_loss_exponent": 2.0
+    },
+    "de": {
+      "name": "Germany",
+      "frequencies": [
+        {
+          "name": "Police BOS",
+          "center_freq": 410000000,
+          "bandwidth": 25000,
+          "mode": "DMR"
+        },
+        {
+          "name": "Police Tetra",
+          "center_freq": 380000000,
+          "bandwidth": 25000,
+          "mode": "Tetra"
+        }
+      ],
+      "tx_power_dbm": 30,
+      "path_loss_exponent": 2.0
+    },
+    "be": {
+      "name": "Belgium",
+      "frequencies": [
+        {
+          "name": "Police Tetra",
+          "center_freq": 380000000,
+          "bandwidth": 25000,
+          "mode": "Tetra"
+        }
+      ],
+      "tx_power_dbm": 30,
+      "path_loss_exponent": 2.0
+    }
+  },
+  "rssi_calibration": {
+    "reference_distance_m": 1,
+    "reference_rssi_dbm": -30
+  }
+}

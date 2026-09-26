@@ -90,7 +90,8 @@ class SentinelRadar:
         self.sdr = SDRHandler(
             center_freq=primary_freq,
             sample_rate=self.config['sdr']['sample_rate'],
-            gain=self.config['sdr']['gain']
+            gain=self.config['sdr']['gain'],
+            detection_threshold_dbm=self.config['sdr'].get('detection_threshold_dbm', -40.0)
         )
         
         if not self.sdr.connect():

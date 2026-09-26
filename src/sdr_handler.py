@@ -11,7 +11,8 @@ logger = logging.getLogger(__name__)
 class SDRHandler:
     """Manages RTL-SDR dongle for frequency scanning and signal detection."""
 
-    def __init__(self, center_freq: int, sample_rate: int = 2400000, gain: str = "auto"):
+    def __init__(self, center_freq: int, sample_rate: int = 2400000, gain: str = "auto",
+                 detection_threshold_dbm: float = -40.0):
         """
         Initialize SDR handler.
         
@@ -19,10 +20,13 @@ class SDRHandler:
             center_freq: Center frequency in Hz
             sample_rate: Sample rate in Hz
             gain: Gain setting ('auto' or dB value)
+            detection_threshold_dbm: RSSI in dBm above which a signal counts as detected
+                                     (configurable via settings.json: sdr.detection_threshold_dbm)
         """
         self.center_freq = center_freq
         self.sample_rate = sample_rate
         self.gain = gain
+        self.detection_threshold_dbm = detection_threshold_dbm
         self.sdr: Optional[RtlSdr] = None
         self.is_connected = False
 
@@ -117,8 +121,8 @@ class SDRHandler:
             
             rssi = self.get_rssi(samples)
             
-            # Simple threshold: if RSSI > -80 dBm, consider signal detected
-            signal_detected = rssi > -40
+            # Signal detection threshold (configurable via settings.json)
+            signal_detected = rssi > self.detection_threshold_dbm
             
             return rssi, signal_detected
         except Exception as e:

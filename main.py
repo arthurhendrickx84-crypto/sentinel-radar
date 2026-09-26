@@ -56,6 +56,9 @@ class SentinelRadar:
         
         self.running = False
         self.last_alert_level = -1  # Track alert level changes for INFO logging
+        self._sync_check_time = 0.0
+        self._sync_ok = True       # NTP-sync status, refreshed every 30 s
+        self._unsynced_since = 0.0 # When the clock became unsynced
         self.last_distance_m = 9999.0   # Last valid distance, held between scans
         self.last_detect_time = 0.0     # Timestamp of last successful detection
         self.signal_hold_s = 5.0        # Keep detection alive this long without new signal
@@ -138,10 +141,12 @@ class SentinelRadar:
             height=self.config['display']['height']
         )
         
-        # Initialize sound alert
+        # Initialize sound alert (aplay-based, no pyaudio needed)
+        snd = self.config.get('sound', {})
         self.sound_alert = SoundAlert(
-            alert_file=self.config['sound']['alert_file'],
-            volume=self.config['sound']['volume']
+            alert_file=snd.get('alert_file', 'data/sounds/alert.wav'),
+            volume=snd.get('volume', 0.8),
+            device=snd.get('device')
         )
         
         # Initialize CSV ride logger
@@ -174,6 +179,23 @@ class SentinelRadar:
             while self.running:
                 current_time = time.time()
                 
+                # Refresh NTP sync status every 30 s (hotspot can go off
+                # again once SYNC shows green on the display)
+                if current_time - self._sync_check_time >= 30:
+                    try:
+                        import subprocess
+                        r = subprocess.run(
+                            ['timedatectl', 'show', '--value', '--property=NTPSynchronized'],
+                            capture_output=True, text=True, timeout=2)
+                        self._sync_ok = (r.stdout.strip() == 'yes')
+                    except Exception:
+                        self._sync_ok = True  # assume ok on probe failure
+                    if not self._sync_ok and self._unsynced_since == 0.0:
+                        self._unsynced_since = current_time
+                    elif self._sync_ok:
+                        self._unsynced_since = 0.0
+                    self._sync_check_time = current_time
+
                 # Read camera frame
                 frame = None
                 motion_detected = False
@@ -240,9 +262,10 @@ class SentinelRadar:
                 if self.alert_system:
                     status = self.alert_system.update(distance_m)
                     
-                    # Play sound if needed
-                    if status['sound_alert'] and self.sound_alert:
-                        self.sound_alert.play(duration_s=0.2)
+                    # Play sound if needed (honors config['sound']['enabled'])
+                    if status['sound_alert'] and self.sound_alert and \
+                            self.config.get('sound', {}).get('enabled', True):
+                        self.sound_alert.play(duration_s=1.4)
                     
                     # Log alert level changes at INFO level (keeps a useful
                     # history without per-frame debug spam)
@@ -268,7 +291,10 @@ class SentinelRadar:
                         motion_detected=motion_detected,
                         last_detection=self.last_detection_info,
                         noise_warning=(current_time < noise_flag_until),
-                        track=self.last_track
+                        track=self.last_track,
+                        clock_synced=self._sync_ok,
+                        clock_unsynced_s=(current_time - self._unsynced_since
+                                          if self._unsynced_since else 0.0)
                     )
                     
                     if display_frame is not None:

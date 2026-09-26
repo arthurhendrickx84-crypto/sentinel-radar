@@ -44,7 +44,8 @@
   "sound": {
     "enabled": true,
     "alert_file": "data/sounds/alert.wav",
-    "volume": 0.8
+    "volume": 0.9,
+    "device": "default:CARD=Headphones"
   },
   "logging": {
     "csv_enabled": true,

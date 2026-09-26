@@ -63,7 +63,9 @@ class DisplayHandler:
                     motion_detected: bool,
                     last_detection: Optional[dict] = None,
                     noise_warning: bool = False,
-                    track: Optional[dict] = None) -> Optional[np.ndarray]:
+                    track: Optional[dict] = None,
+                    clock_synced: bool = True,
+                    clock_unsynced_s: float = 0.0) -> Optional[np.ndarray]:
         """
         Render display frame with all information.
         
@@ -87,7 +89,7 @@ class DisplayHandler:
         # Draw overlay info
         self._draw_info_overlay(frame, distance_m, indicators, alarm_active,
                                 motion_detected, last_detection, noise_warning,
-                                track)
+                                track, clock_synced, clock_unsynced_s)
         
         return frame
 
@@ -95,7 +97,9 @@ class DisplayHandler:
                           indicators: int, alarm_active: bool, motion_detected: bool,
                           last_detection: Optional[dict] = None,
                           noise_warning: bool = False,
-                          track: Optional[dict] = None):
+                          track: Optional[dict] = None,
+                          clock_synced: bool = True,
+                          clock_unsynced_s: float = 0.0):
         """
         Draw information overlay on frame.
         
@@ -118,9 +122,17 @@ class DisplayHandler:
         small_scale = 0.42 * s
         thick = max(1, int(round(s)))
         
-        # Line 1 (top-left): clock
+        # Line 1 (top-left): clock + sync indicator.
+        # SYNC in green = NTP verified, safe to switch the hotspot off.
+        # KLOK! in red = unsynced >60s, enable hotspot to fix.
         cv2.putText(frame, datetime.now().strftime("%H:%M:%S"),
                     (8, int(20 * s)), font, small_scale, white, thick)
+        if clock_synced:
+            cv2.putText(frame, "SYNC", (int(62 * s), int(20 * s)),
+                        font, small_scale, (0, 255, 0), thick)
+        elif clock_unsynced_s > 60:
+            cv2.putText(frame, "KLOK!", (int(62 * s), int(20 * s)),
+                        font, small_scale, (0, 0, 255), thick)
         
         # Line 2: motion status directly UNDER the clock (no overlap)
         motion_color = (0, 255, 0) if motion_detected else gray

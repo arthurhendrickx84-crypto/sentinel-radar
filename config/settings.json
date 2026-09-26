@@ -17,12 +17,12 @@
   "alerts": {
     "distance_threshold_m": 1000,
     "distance_levels": [
-      { "distance_m": 1000, "indicators": 1, "sound": false },
-      { "distance_m": 600, "indicators": 2, "sound": false },
-      { "distance_m": 400, "indicators": 3, "sound": false },
-      { "distance_m": 250, "indicators": 4, "sound": false },
-      { "distance_m": 150, "indicators": 5, "sound": false },
-      { "distance_m": 30, "indicators": 6, "sound": true }
+      { "distance_m": 150, "indicators": 1, "sound": false },
+      { "distance_m": 100, "indicators": 2, "sound": false },
+      { "distance_m": 60, "indicators": 3, "sound": false },
+      { "distance_m": 40, "indicators": 4, "sound": false },
+      { "distance_m": 25, "indicators": 5, "sound": false },
+      { "distance_m": 10, "indicators": 6, "sound": true }
     ]
   },
   "display": {

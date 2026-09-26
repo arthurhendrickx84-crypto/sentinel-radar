@@ -195,7 +195,6 @@ class SentinelRadar:
                     if signal_detected:
                         self.last_distance_m = self.sdr.estimate_distance(
                             rssi,
-                            tx_power_dbm=33,
                             path_loss_exponent=3.0
                         )
                         # Only accept mobile transmitters within max range;

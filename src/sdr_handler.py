@@ -113,31 +113,35 @@ class SDRHandler:
         
         return rssi_dbm
 
-    def estimate_distance(self, rssi_dbm: float, tx_power_dbm: float = 33.0, 
+    def estimate_distance(self, rssi_dbm: float,
+                         ref_distance_m: float = 3.0,
+                         ref_rssi_dbm: float = -36.4,
                          path_loss_exponent: float = 3.0) -> float:
         """
-        Estimate distance from RSSI using log-distance path loss model.
+        Estimate distance from RSSI, anchored to a measured reference point.
         
-        Formula: Distance = 10 ^ ((TxPower - RSSI) / (10 * N))
+        Anchor: C2000 mobile radio (2 W) at 3 m measured -36.4 dBm during a
+        test ride (ambulance alongside, 2026-09-26 20:09). The RTL-SDR RSSI
+        is uncalibrated (depends on gain setting), so absolute path-loss
+        formulas are misleading; we scale relative to the anchor instead.
         
-        Calibrated for C2000 mobile radios (vehicle sets / portofoons):
-        tx_power ~33 dBm (2 W), path loss exponent 3.0 (suburban terrain,
-        matches measured RSSIs during test rides). Base station downlink is
-        much stronger (~46 dBm) but those carriers are suppressed by the
-        mast filter before this model is used.
+        Formula: d = ref_d * 10 ^ ((ref_rssi - rssi) / (10 * n))
         
         Args:
-            rssi_dbm: Received signal strength in dBm
-            tx_power_dbm: Mobile transmitter power in dBm
-            path_loss_exponent: Path loss exponent (3.0 suburban)
+            rssi_dbm: Received signal strength (pipeline units)
+            ref_distance_m: Distance of the calibration anchor in meters
+            ref_rssi_dbm: RSSI measured at the anchor distance
+            path_loss_exponent: n (2 = free space, 3+ = obstructed; needs
+                                more anchor points to pin down precisely)
             
         Returns:
-            Estimated distance in meters
+            Estimated distance in meters (min 1 m)
         """
-        if rssi_dbm >= tx_power_dbm:
-            return 0.1  # Very close
+        if rssi_dbm >= ref_rssi_dbm + 20:
+            return 0.5  # extremely close / receiver saturated
         
-        distance = 10 ** ((tx_power_dbm - rssi_dbm) / (20 * path_loss_exponent))
+        distance = ref_distance_m * 10 ** (
+            (ref_rssi_dbm - rssi_dbm) / (10 * path_loss_exponent))
         return max(distance, 1.0)  # At least 1 meter
 
     def scan_frequency(self, freq_hz: int, duration_s: float = 1.0) -> Tuple[float, bool]:

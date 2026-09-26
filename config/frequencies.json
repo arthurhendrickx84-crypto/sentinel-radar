@@ -4,16 +4,16 @@
       "name": "Netherlands",
       "frequencies": [
         {
-          "name": "Police DMR Tier III",
-          "center_freq": 414000000,
+          "name": "C2000 TETRA Base",
+          "center_freq": 422500000,
           "bandwidth": 25000,
-          "mode": "DMR"
+          "mode": "TETRA"
         },
         {
-          "name": "Police P25/Tetra",
-          "center_freq": 420000000,
+          "name": "C2000 TETRA Alt",
+          "center_freq": 427500000,
           "bandwidth": 25000,
-          "mode": "P25"
+          "mode": "TETRA"
         },
         {
           "name": "PMR446 (Public Mobile Radio)",
@@ -29,16 +29,16 @@
       "name": "Germany",
       "frequencies": [
         {
-          "name": "Police BOS",
-          "center_freq": 410000000,
-          "bandwidth": 25000,
-          "mode": "DMR"
-        },
-        {
-          "name": "Police Tetra",
+          "name": "BOS TETRA",
           "center_freq": 380000000,
           "bandwidth": 25000,
-          "mode": "Tetra"
+          "mode": "TETRA"
+        },
+        {
+          "name": "BOS TETRA Alt",
+          "center_freq": 390000000,
+          "bandwidth": 25000,
+          "mode": "TETRA"
         }
       ],
       "tx_power_dbm": 30,
@@ -48,10 +48,16 @@
       "name": "Belgium",
       "frequencies": [
         {
-          "name": "Police Tetra",
+          "name": "ASTRID TETRA",
           "center_freq": 380000000,
           "bandwidth": 25000,
-          "mode": "Tetra"
+          "mode": "TETRA"
+        },
+        {
+          "name": "ASTRID TETRA Alt",
+          "center_freq": 420000000,
+          "bandwidth": 25000,
+          "mode": "TETRA"
         }
       ],
       "tx_power_dbm": 30,

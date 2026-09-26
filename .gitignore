@@ -40,6 +40,9 @@ data/sounds/*.wav
 .env
 local_config.json
 
+# Lokaal Pi-toegangsbewijs (nooit naar GitHub)
+PI-TOEGANG-LOKAAL.md
+
 # Video files
 *.mp4
 *.avi

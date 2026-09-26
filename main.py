@@ -50,6 +50,7 @@ class SentinelRadar:
         self.sound_alert: Optional[SoundAlert] = None
         
         self.running = False
+        self.last_alert_level = -1  # Track alert level changes for INFO logging
 
     def _load_config(self, config_file: str) -> dict:
         """Load configuration from JSON."""
@@ -182,10 +183,15 @@ class SentinelRadar:
                     if status['sound_alert'] and self.sound_alert:
                         self.sound_alert.play(duration_s=0.2)
                     
-                    # Display info
-                    logger.debug(f"Frame {frame_count}: {status['distance_m']:.1f}m, "
-                               f"Alert: {status['alert_active']}, "
-                               f"Lights: {status['indicators']}")
+                    # Log alert level changes at INFO level (keeps a useful
+                    # history without per-frame debug spam)
+                    current_level = status['indicators']
+                    if current_level != self.last_alert_level:
+                        logger.info(f"Alert level change: {self.last_alert_level} -> "
+                                    f"{current_level} indicators "
+                                    f"(distance {status['distance_m']:.0f}m, "
+                                    f"alarm: {status['alert_active']})")
+                        self.last_alert_level = current_level
                 
                 # Render and display frame
                 if self.display and self.alert_system:

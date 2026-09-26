@@ -163,10 +163,12 @@ class DisplayHandler:
         # nearest active radio (Blueye-style trend, no content decoded)
         if track:
             trend = track.get('trend', '')
+            # Same traffic-light language as the lamps: red = close,
+            # green = moving away, gray = stable
             if trend == 'dichterbij':
-                track_color = (0, 255, 0)
+                track_color = (0, 0, 255)
             elif trend == 'verder':
-                track_color = (0, 165, 255)
+                track_color = (0, 255, 0)
             else:
                 track_color = (200, 200, 200)
             track_text = f"Voertuig: {track['bursts']}x"
@@ -202,9 +204,18 @@ class DisplayHandler:
         spacing = int(25 * (self.width / 320.0))
         start_x = self.width // 2 - 3 * spacing
         
+        # Traffic-light scheme: green = far, orange = nearing, red = close
         for i in range(6):
             x = start_x + i * spacing
-            color = (0, 255, 0) if i < indicators else (100, 100, 100)
+            if i < indicators:
+                if i < 2:
+                    color = (0, 255, 0)      # ver weg: groen
+                elif i < 4:
+                    color = (0, 165, 255)    # nabij komend: oranje
+                else:
+                    color = (0, 0, 255)      # dichtbij: rood
+            else:
+                color = (100, 100, 100)      # uit
             cv2.circle(frame, (x, y_pos), light_radius, color, -1)
             cv2.circle(frame, (x, y_pos), light_radius, (255, 255, 255), 2)
 

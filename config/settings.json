@@ -9,6 +9,7 @@
     "gain": 40,
     "detection_threshold_dbm": -80,
     "detection_margin_db": 6,
+    "min_burst_rssi_dbm": -52,
     "scan_frequencies": [390012500, 390300000, 390700000, 391100000, 391500000, 391900000, 392350000, 392800000, 393200000, 393600000, 393900000, 394400000],
     "ppm_error": 0,
     "bandwidth": 2500000

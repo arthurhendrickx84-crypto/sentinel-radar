@@ -61,7 +61,8 @@ class DisplayHandler:
                     indicators: int,
                     alarm_active: bool,
                     motion_detected: bool,
-                    last_detection: Optional[dict] = None) -> Optional[np.ndarray]:
+                    last_detection: Optional[dict] = None,
+                    noise_warning: bool = False) -> Optional[np.ndarray]:
         """
         Render display frame with all information.
         
@@ -84,13 +85,14 @@ class DisplayHandler:
         
         # Draw overlay info
         self._draw_info_overlay(frame, distance_m, indicators, alarm_active,
-                                motion_detected, last_detection)
+                                motion_detected, last_detection, noise_warning)
         
         return frame
 
     def _draw_info_overlay(self, frame: np.ndarray, distance_m: float, 
                           indicators: int, alarm_active: bool, motion_detected: bool,
-                          last_detection: Optional[dict] = None):
+                          last_detection: Optional[dict] = None,
+                          noise_warning: bool = False):
         """
         Draw information overlay on frame.
         
@@ -148,10 +150,14 @@ class DisplayHandler:
             cv2.putText(frame, last_text, (last_x, last_y),
                         font, small_scale, (0, 215, 255), thick)
         
-        # Indicator lights (bottom, centered)
-        self._draw_indicator_lights(frame, indicators)
+        # Broadband-noise warning: vehicle electronics are drowning the RF
+        # input; detections are unreliable while this shows
+        if noise_warning:
+            cv2.putText(frame, "RUIS - storing in auto", (8, int(60 * s)),
+                        font, small_scale, (0, 165, 255), thick)
         
-        # Alarm status: top-right (free since motion moved under the clock)
+        # Indicator lights (bottom, centered)
+        self._draw_indicator_lights(frame, indicators)        # Alarm status: top-right (free since motion moved under the clock)
         if alarm_active:
             alarm_scale = 0.8 * s
             (aw, _), _ = cv2.getTextSize("ALARM!", font, alarm_scale, 2)

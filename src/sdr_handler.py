@@ -16,7 +16,9 @@ class SDRHandler:
     def __init__(self, center_freq: int, sample_rate: int = 2400000, gain: str = "auto",
                  detection_threshold_dbm: float = -40.0,
                  scan_frequencies: Optional[List[int]] = None,
-                 detection_margin_db: float = 6.0):
+                 detection_margin_db: float = 6.0,
+                 min_burst_rssi_dbm: float = -52.0,
+                 noise_correlation_window_s: float = 0.4):
         """
         Initialize SDR handler.
         
@@ -49,6 +51,15 @@ class SDRHandler:
         self._above_history = {f: deque(maxlen=40) for f in self.scan_freqs}
         self._mast_flags: Set[int] = set()
         self.mast_suppressed_count = 0
+        
+        # Broadband-noise rejection: a real TETRA burst occupies ONE channel.
+        # Vehicle electronics (ignition, alternator, SMPS) produce broadband
+        # noise that lights up multiple channels at (nearly) the same moment.
+        # If another channel burst recently, treat the current burst as noise.
+        self.min_burst_rssi_dbm = min_burst_rssi_dbm
+        self.noise_window_s = noise_correlation_window_s
+        self._last_burst_time: dict = {f: 0.0 for f in self.scan_freqs}
+        self.noise_rejected_count = 0
         
         self.sdr: Optional[RtlSdr] = None
         self.is_connected = False
@@ -220,8 +231,24 @@ class SDRHandler:
             if is_above and mast_suspect:
                 self.mast_suppressed_count += 1
                 signal_detected = False
+            elif is_above:
+                # Stamp this above-baseline event, then apply noise rules
+                self._last_burst_time[freq] = now
+                
+                recent_other = [f2 for f2, t2 in self._last_burst_time.items()
+                                if f2 != freq and now - t2 <= self.noise_window_s]
+                if recent_other:
+                    # Multiple channels active at once -> broadband noise
+                    self.noise_rejected_count += 1
+                    signal_detected = False
+                elif rssi < self.min_burst_rssi_dbm:
+                    # Too weak to stand out above vehicle noise floor
+                    self.noise_rejected_count += 1
+                    signal_detected = False
+                else:
+                    signal_detected = True
             else:
-                signal_detected = is_above
+                signal_detected = False
             
             return rssi, signal_detected, freq
         except Exception as e:

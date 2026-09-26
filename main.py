@@ -100,7 +100,8 @@ class SentinelRadar:
             gain=self.config['sdr']['gain'],
             detection_threshold_dbm=self.config['sdr'].get('detection_threshold_dbm', -40.0),
             scan_frequencies=self.config['sdr'].get('scan_frequencies'),
-            detection_margin_db=self.config['sdr'].get('detection_margin_db', 6.0)
+            detection_margin_db=self.config['sdr'].get('detection_margin_db', 6.0),
+            min_burst_rssi_dbm=self.config['sdr'].get('min_burst_rssi_dbm', -52.0)
         )
         
         if not self.sdr.connect():
@@ -158,6 +159,8 @@ class SentinelRadar:
         scan_interval = 0.25  # Scan every 250ms (round-robin over scan frequencies)
         max_distance_m = float(self.config['alerts'].get('distance_threshold_m', 500))
         last_scan_time = time.time()
+        last_rejected = 0        # noise-rejection counter, for the display warning
+        noise_flag_until = 0.0   # show noise warning until this time
         
         logger.info("Starting main loop...")
         
@@ -181,6 +184,10 @@ class SentinelRadar:
                 # scans so display and alerts don't flicker on and off
                 if current_time - last_scan_time >= scan_interval and self.sdr:
                     rssi, signal_detected, scanned_freq = self.sdr.scan_next()
+
+                    if self.sdr.noise_rejected_count > last_rejected:
+                        last_rejected = self.sdr.noise_rejected_count
+                        noise_flag_until = current_time + 5.0
 
                     if self.csv:
                         self.csv.log_scan(scanned_freq, rssi)
@@ -247,7 +254,8 @@ class SentinelRadar:
                         indicators=self.alert_system.current_level.indicators if self.alert_system.current_level else 0,
                         alarm_active=self.alert_system.should_sound_alarm(),
                         motion_detected=motion_detected,
-                        last_detection=self.last_detection_info
+                        last_detection=self.last_detection_info,
+                        noise_warning=(current_time < noise_flag_until)
                     )
                     
                     if display_frame is not None:

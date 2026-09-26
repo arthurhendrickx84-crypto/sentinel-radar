@@ -68,12 +68,13 @@ class CSVLogger:
             logger.error(f"CSV write failed: {e}")
 
     def log_burst(self, freq_hz: float, rssi_dbm: float, distance_m: float,
-                  accepted: bool = True):
+                  accepted: bool = True, extra_info: str = ""):
         """Log a detected signal burst (accepted = within max distance)."""
         self._write("burst" if accepted else "burst_far",
                     freq_mhz=round(freq_hz / 1e6, 4),
                     rssi_dbm=round(rssi_dbm, 1),
-                    distance_m=round(distance_m, 1))
+                    distance_m=round(distance_m, 1),
+                    extra=extra_info)
 
     def log_alert(self, indicators: int, distance_m: float, alarm: bool):
         """Log an alert level change."""

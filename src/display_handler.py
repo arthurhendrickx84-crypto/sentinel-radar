@@ -62,7 +62,8 @@ class DisplayHandler:
                     alarm_active: bool,
                     motion_detected: bool,
                     last_detection: Optional[dict] = None,
-                    noise_warning: bool = False) -> Optional[np.ndarray]:
+                    noise_warning: bool = False,
+                    track: Optional[dict] = None) -> Optional[np.ndarray]:
         """
         Render display frame with all information.
         
@@ -85,14 +86,16 @@ class DisplayHandler:
         
         # Draw overlay info
         self._draw_info_overlay(frame, distance_m, indicators, alarm_active,
-                                motion_detected, last_detection, noise_warning)
+                                motion_detected, last_detection, noise_warning,
+                                track)
         
         return frame
 
     def _draw_info_overlay(self, frame: np.ndarray, distance_m: float, 
                           indicators: int, alarm_active: bool, motion_detected: bool,
                           last_detection: Optional[dict] = None,
-                          noise_warning: bool = False):
+                          noise_warning: bool = False,
+                          track: Optional[dict] = None):
         """
         Draw information overlay on frame.
         
@@ -155,6 +158,25 @@ class DisplayHandler:
         if noise_warning:
             cv2.putText(frame, "RUIS - storing in auto", (8, int(60 * s)),
                         font, small_scale, (0, 165, 255), thick)
+        
+        # Vehicle track line: burst count + approach/retreat trend for the
+        # nearest active radio (Blueye-style trend, no content decoded)
+        if track:
+            trend = track.get('trend', '')
+            if trend == 'dichterbij':
+                track_color = (0, 255, 0)
+            elif trend == 'verder':
+                track_color = (0, 165, 255)
+            else:
+                track_color = (200, 200, 200)
+            track_text = f"Voertuig: {track['bursts']}x"
+            if trend:
+                track_text += f" {trend}"
+            (tw, _), _ = cv2.getTextSize(track_text, font, small_scale, thick)
+            track_x = max(8, (self.width - tw) // 2)
+            track_y = self.height - int(52 * s)
+            cv2.putText(frame, track_text, (track_x, track_y),
+                        font, small_scale, track_color, thick)
         
         # Indicator lights (bottom, centered)
         self._draw_indicator_lights(frame, indicators)        # Alarm status: top-right (free since motion moved under the clock)

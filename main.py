@@ -19,6 +19,7 @@ from src.alert_system import AlertSystem
 from src.display_handler import DisplayHandler
 from src.sound_alert import SoundAlert
 from src.csv_logger import CSVLogger
+from src.vehicle_tracker import VehicleTracker
 
 # Setup logging
 logging.basicConfig(
@@ -51,6 +52,7 @@ class SentinelRadar:
         self.display: Optional[DisplayHandler] = None
         self.sound_alert: Optional[SoundAlert] = None
         self.csv: Optional[CSVLogger] = None
+        self.tracker: Optional[VehicleTracker] = None
         
         self.running = False
         self.last_alert_level = -1  # Track alert level changes for INFO logging
@@ -58,6 +60,7 @@ class SentinelRadar:
         self.last_detect_time = 0.0     # Timestamp of last successful detection
         self.signal_hold_s = 5.0        # Keep detection alive this long without new signal
         self.last_detection_info = None # Last accepted burst, for the persistent display line
+        self.last_track = {}            # Nearest vehicle track summary for display
 
     def _load_config(self, config_file: str) -> dict:
         """Load configuration from JSON."""
@@ -149,6 +152,9 @@ class SentinelRadar:
             log_all_scans=log_cfg.get('log_all_scans', False)
         )
         
+        # Initialize vehicle tracker (Blueye-style approach/retreat trends)
+        self.tracker = VehicleTracker()
+        
         logger.info("Initialization complete")
         return True
 
@@ -208,13 +214,18 @@ class SentinelRadar:
                             'distance_m': self.last_distance_m,
                             'time': datetime.now().strftime('%H:%M:%S')
                         }
+                        track_now = (self.tracker.feed(
+                            scanned_freq, rssi, self.last_distance_m)
+                            if self.tracker else {})
                         logger.info(f"Signal burst: {rssi:.1f} dBm @ "
                                     f"{scanned_freq/1e6:.3f} MHz -> "
                                     f"~{self.last_distance_m:.0f}m")
                         if self.csv:
-                            self.csv.log_burst(scanned_freq, rssi,
-                                               self.last_distance_m,
-                                               accepted=self.last_distance_m <= max_distance_m)
+                            self.csv.log_burst(
+                                scanned_freq, rssi, self.last_distance_m,
+                                accepted=self.last_distance_m <= max_distance_m,
+                                extra_info=(f"{track_now['bursts']}x {track_now['trend']}"
+                                            if track_now else ""))
                     elif current_time - self.last_detect_time > self.signal_hold_s:
                         # No signal for longer than the hold window: reset
                         self.last_distance_m = 9999.0
@@ -222,6 +233,8 @@ class SentinelRadar:
                     last_scan_time = current_time
                 
                 distance_m = self.last_distance_m
+                if self.tracker:
+                    self.last_track = self.tracker.summary(current_time)
                 
                 # Update alert system
                 if self.alert_system:
@@ -254,7 +267,8 @@ class SentinelRadar:
                         alarm_active=self.alert_system.should_sound_alarm(),
                         motion_detected=motion_detected,
                         last_detection=self.last_detection_info,
-                        noise_warning=(current_time < noise_flag_until)
+                        noise_warning=(current_time < noise_flag_until),
+                        track=self.last_track
                     )
                     
                     if display_frame is not None:

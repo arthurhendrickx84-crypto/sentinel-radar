@@ -7,6 +7,7 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
+from pathlib import Path
 from typing import Optional
 
 import click
@@ -68,13 +69,35 @@ class SentinelRadar:
         self.last_track = {}            # Nearest vehicle track summary for display
 
     def _load_config(self, config_file: str) -> dict:
-        """Load configuration from JSON."""
+        """Load configuration from JSON, with optional local override.
+        
+        local_config.json (gitignored) deep-merges over settings.json so
+        secrets (bot tokens etc.) stay out of the repository.
+        """
         try:
             with open(config_file, 'r') as f:
-                return json.load(f)
+                config = json.load(f)
+            
+            local_file = Path(config_file).parent / "local_config.json"
+            if local_file.exists():
+                with open(local_file, 'r') as f:
+                    local = json.load(f)
+                self._deep_merge(config, local)
+                logger.info(f"Local config overrides applied: {local_file}")
+            return config
         except Exception as e:
             logger.error(f"Error loading config: {e}")
             return {}
+
+    @staticmethod
+    def _deep_merge(base: dict, override: dict) -> dict:
+        """Recursively merge override into base (override wins)."""
+        for key, value in override.items():
+            if isinstance(value, dict) and isinstance(base.get(key), dict):
+                SentinelRadar._deep_merge(base[key], value)
+            else:
+                base[key] = value
+        return base
 
     def _load_frequencies(self, frequencies_file: str) -> dict:
         """Load frequency database."""

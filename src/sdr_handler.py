@@ -45,7 +45,7 @@ class SDRHandler:
             logger.error(f"Failed to connect to SDR: {e}")
             return False
 
-    def read_samples(self, num_samples: int = 256 * 1024) -> Optional[np.ndarray]:
+    def read_samples(self, num_samples: int = 16384) -> Optional[np.ndarray]:
         """Read samples from SDR."""
         if not self.is_connected or self.sdr is None:
             return None
@@ -112,13 +112,13 @@ class SDRHandler:
         
         try:
             self.sdr.center_freq = freq_hz
-            num_samples = int(self.sample_rate * duration_s)
+            num_samples = min(16384, int(self.sample_rate * duration_s))
             samples = self.sdr.read_samples(num_samples)
             
             rssi = self.get_rssi(samples)
             
             # Simple threshold: if RSSI > -80 dBm, consider signal detected
-            signal_detected = rssi > -80
+            signal_detected = rssi > -40
             
             return rssi, signal_detected
         except Exception as e:

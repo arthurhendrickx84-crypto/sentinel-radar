@@ -158,7 +158,7 @@ class SentinelRadar:
                             frame = self.motion_detector.draw_contours(frame)
                 
                 # Scan RF periodically
-                distance_m = 0
+                distance_m = 9999
                 if current_time - last_scan_time >= scan_interval and self.sdr:
                     rssi, signal_detected = self.sdr.scan_frequency(
                         self.sdr.center_freq,

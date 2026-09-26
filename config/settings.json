@@ -5,8 +5,8 @@
     "country": "nl"
   },
   "sdr": {
-    "sample_rate": 2400000,
-    "gain": "auto",
+    "sample_rate": 1024000,
+    "gain": 30,
     "ppm_error": 0,
     "bandwidth": 2500000
   },
@@ -23,8 +23,8 @@
   },
   "display": {
     "type": "terminal",
-    "width": 1920,
-    "height": 1080,
+    "width": 320,
+    "height": 240,
     "fps": 30,
     "spi_port": 0,
     "spi_device": 0,

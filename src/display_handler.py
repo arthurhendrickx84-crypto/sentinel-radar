@@ -25,11 +25,28 @@ class DisplayHandler:
         self.width = width
         self.height = height
         self.is_active = False
+        self.fb_bpp = 16
+        self.fb_path = "/dev/fb1"
         
         if display_type == "terminal":
             self.is_active = True
         elif display_type == "hdmi":
             self.is_active = True
+        elif display_type == "fb":
+            # Direct framebuffer output (e.g. ILI9340 TFT on /dev/fb1).
+            # No X server needed - works headless and under systemd.
+            try:
+                with open("/sys/class/graphics/fb1/virtual_size") as f:
+                    w, h = f.read().strip().split(",")
+                    self.width, self.height = int(w), int(h)
+                with open("/sys/class/graphics/fb1/bits_per_pixel") as f:
+                    self.fb_bpp = int(f.read().strip())
+                self.is_active = True
+                logger.info(f"Framebuffer display: {self.fb_path} "
+                            f"{self.width}x{self.height}@{self.fb_bpp}bpp")
+            except Exception as e:
+                logger.error(f"Failed to initialize framebuffer display: {e}")
+                self.is_active = False
         elif display_type == "spi":
             try:
                 # Import RPi.GPIO and SPI display libraries
@@ -142,6 +159,20 @@ class DisplayHandler:
         if self.display_type == "terminal" or self.display_type == "hdmi":
             cv2.imshow("Sentinel Radar", frame)
             cv2.waitKey(1)  # 1ms delay for event processing
+        elif self.display_type == "fb":
+            # Render directly to the framebuffer as RGB565 (16bpp)
+            try:
+                if (frame.shape[1], frame.shape[0]) != (self.width, self.height):
+                    frame = cv2.resize(frame, (self.width, self.height))
+                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                r = (rgb[:, :, 0].astype(np.uint16) >> 3) << 11
+                g = (rgb[:, :, 1].astype(np.uint16) >> 2) << 5
+                b = (rgb[:, :, 2].astype(np.uint16) >> 3)
+                buf = (r | g | b).astype("<u2").tobytes()
+                with open(self.fb_path, "wb") as f:
+                    f.write(buf)
+            except Exception as e:
+                logger.error(f"Error writing to framebuffer: {e}")
         elif self.display_type == "spi":
             # Convert and send to SPI display
             try:

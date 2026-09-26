@@ -51,5 +51,12 @@
     "csv_enabled": true,
     "csv_dir": "~/radar_logs",
     "log_all_scans": false
+  },
+  "telegram": {
+    "enabled": true,
+    "bot_token": "",
+    "chat_id": "",
+    "orange_cooldown_s": 25,
+    "red_cooldown_s": 8
   }
 }

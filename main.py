@@ -20,6 +20,7 @@ from src.display_handler import DisplayHandler
 from src.sound_alert import SoundAlert
 from src.csv_logger import CSVLogger
 from src.vehicle_tracker import VehicleTracker
+from src.telegram_alert import TelegramAlert
 
 # Setup logging
 logging.basicConfig(
@@ -53,6 +54,7 @@ class SentinelRadar:
         self.sound_alert: Optional[SoundAlert] = None
         self.csv: Optional[CSVLogger] = None
         self.tracker: Optional[VehicleTracker] = None
+        self.telegram: Optional[TelegramAlert] = None
         
         self.running = False
         self.last_alert_level = -1  # Track alert level changes for INFO logging
@@ -159,6 +161,16 @@ class SentinelRadar:
         
         # Initialize vehicle tracker (Blueye-style approach/retreat trends)
         self.tracker = VehicleTracker()
+        
+        # Telegram alerts (orange/red -> iPhone notification -> CarPlay banner)
+        tg = self.config.get('telegram', {})
+        self.telegram = TelegramAlert(
+            bot_token=tg.get('bot_token', ''),
+            chat_id=tg.get('chat_id', ''),
+            orange_cooldown_s=tg.get('orange_cooldown_s', 25.0),
+            red_cooldown_s=tg.get('red_cooldown_s', 8.0),
+            enabled=tg.get('enabled', True)
+        )
         
         logger.info("Initialization complete")
         return True
@@ -280,6 +292,17 @@ class SentinelRadar:
                             self.csv.log_alert(current_level,
                                                status['distance_m'],
                                                self.alert_system.should_sound_alarm())
+                        # Telegram notification at orange/red (cooldown inside)
+                        if self.telegram and current_level >= 3:
+                            trend = self.last_track.get('trend', '')
+                            bursts = self.last_track.get('bursts', 0)
+                            freq = (self.last_detection_info['freq_mhz']
+                                    if self.last_detection_info else 0.0)
+                            self.telegram.alert(current_level,
+                                                status['distance_m'],
+                                                trend=trend,
+                                                freq_mhz=freq,
+                                                bursts=bursts)
                 
                 # Render and display frame
                 if self.display and self.alert_system:
@@ -329,6 +352,8 @@ class SentinelRadar:
             self.display.close()
         if self.sound_alert:
             self.sound_alert.stop()
+        if self.telegram:
+            self.telegram.stop()
         
         logger.info("Cleanup complete")
 

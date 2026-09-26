@@ -4,26 +4,32 @@
       "name": "Netherlands",
       "frequencies": [
         {
-          "name": "C2000 TETRA Base",
-          "center_freq": 422500000,
+          "name": "C2000 Uplink 1",
+          "center_freq": 390012500,
           "bandwidth": 25000,
           "mode": "TETRA"
         },
         {
-          "name": "C2000 TETRA Alt",
-          "center_freq": 427500000,
+          "name": "C2000 Uplink 2",
+          "center_freq": 390700000,
           "bandwidth": 25000,
           "mode": "TETRA"
         },
         {
-          "name": "PMR446 (Public Mobile Radio)",
-          "center_freq": 446500000,
-          "bandwidth": 12500,
-          "mode": "FM"
+          "name": "C2000 Uplink 3",
+          "center_freq": 391100000,
+          "bandwidth": 25000,
+          "mode": "TETRA"
+        },
+        {
+          "name": "C2000 Uplink 4",
+          "center_freq": 393900000,
+          "bandwidth": 25000,
+          "mode": "TETRA"
         }
       ],
-      "tx_power_dbm": 30,
-      "path_loss_exponent": 2.0
+      "tx_power_dbm": 33,
+      "path_loss_exponent": 3.0
     },
     "de": {
       "name": "Germany",

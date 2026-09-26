@@ -6,22 +6,22 @@
   },
   "sdr": {
     "sample_rate": 1024000,
-    "gain": 30,
-    "detection_threshold_dbm": -75,
+    "gain": 40,
+    "detection_threshold_dbm": -80,
     "detection_margin_db": 6,
-    "scan_frequencies": [420400000, 420200000, 420700000, 390700000, 391100000, 393900000],
+    "scan_frequencies": [390012500, 390300000, 390700000, 391100000, 391500000, 391900000, 392350000, 392800000, 393200000, 393600000, 393900000, 394400000],
     "ppm_error": 0,
     "bandwidth": 2500000
   },
   "alerts": {
-    "distance_threshold_m": 500,
+    "distance_threshold_m": 1000,
     "distance_levels": [
-      { "distance_m": 500, "indicators": 1, "sound": false },
-      { "distance_m": 400, "indicators": 2, "sound": false },
-      { "distance_m": 300, "indicators": 3, "sound": false },
-      { "distance_m": 200, "indicators": 4, "sound": false },
-      { "distance_m": 100, "indicators": 5, "sound": false },
-      { "distance_m": 20, "indicators": 6, "sound": true }
+      { "distance_m": 1000, "indicators": 1, "sound": false },
+      { "distance_m": 600, "indicators": 2, "sound": false },
+      { "distance_m": 400, "indicators": 3, "sound": false },
+      { "distance_m": 250, "indicators": 4, "sound": false },
+      { "distance_m": 150, "indicators": 5, "sound": false },
+      { "distance_m": 30, "indicators": 6, "sound": true }
     ]
   },
   "display": {
@@ -44,5 +44,10 @@
     "enabled": true,
     "alert_file": "data/sounds/alert.wav",
     "volume": 0.8
+  },
+  "logging": {
+    "csv_enabled": true,
+    "csv_dir": "~/radar_logs",
+    "log_all_scans": false
   }
 }

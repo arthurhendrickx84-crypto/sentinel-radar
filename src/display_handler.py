@@ -60,16 +60,18 @@ class DisplayHandler:
                     distance_m: float,
                     indicators: int,
                     alarm_active: bool,
-                    motion_detected: bool) -> Optional[np.ndarray]:
+                    motion_detected: bool,
+                    last_detection: Optional[dict] = None) -> Optional[np.ndarray]:
         """
         Render display frame with all information.
         
         Args:
             camera_frame: Video frame (BGR)
-            distance_m: Distance in meters
+            distance_m: Distance in meters (9999 = no signal)
             indicators: Number of indicator lights (0-6)
             alarm_active: Is alarm currently active
             motion_detected: Is motion detected
+            last_detection: Optional dict describing the last accepted burst
             
         Returns:
             Rendered frame or None
@@ -81,51 +83,80 @@ class DisplayHandler:
             frame = cv2.resize(camera_frame, (self.width, self.height))
         
         # Draw overlay info
-        self._draw_info_overlay(frame, distance_m, indicators, alarm_active, motion_detected)
+        self._draw_info_overlay(frame, distance_m, indicators, alarm_active,
+                                motion_detected, last_detection)
         
         return frame
 
     def _draw_info_overlay(self, frame: np.ndarray, distance_m: float, 
-                          indicators: int, alarm_active: bool, motion_detected: bool):
+                          indicators: int, alarm_active: bool, motion_detected: bool,
+                          last_detection: Optional[dict] = None):
         """
         Draw information overlay on frame.
         
+        Layout is scaled for small displays (320x240 framebuffer);
+        all positions/fonts scale with the display width.
+        
         Args:
             frame: Target frame to draw on
-            distance_m: Distance value
+            distance_m: Distance value (9999 = no signal)
             indicators: Number of lights
             alarm_active: Alarm state
             motion_detected: Motion state
+            last_detection: Optional dict with the most recent accepted burst
+                            (freq_mhz, rssi_dbm, distance_m, time)
         """
+        s = max(self.width / 320.0, 0.5)  # layout scale, designed for 320px width
         font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 0.7
-        font_color = (255, 255, 255)  # White
-        thickness = 2
+        white = (255, 255, 255)
+        gray = (140, 140, 140)
+        small_scale = 0.42 * s
+        thick = max(1, int(round(s)))
         
-        # Top-left: Timestamp
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        cv2.putText(frame, f"Time: {timestamp}", (10, 30), font, font_scale, font_color, thickness)
+        # Line 1 (top-left): clock
+        cv2.putText(frame, datetime.now().strftime("%H:%M:%S"),
+                    (8, int(20 * s)), font, small_scale, white, thick)
         
-        # Top-right: Motion indicator
-        motion_status = "MOTION" if motion_detected else "Clear"
-        motion_color = (0, 255, 0) if motion_detected else (100, 100, 100)
-        cv2.putText(frame, f"Motion: {motion_status}", (self.width - 250, 30), 
-                   font, font_scale, motion_color, thickness)
+        # Line 2: motion status directly UNDER the clock (no overlap)
+        motion_color = (0, 255, 0) if motion_detected else gray
+        cv2.putText(frame, "Motion" if motion_detected else "Clear",
+                    (8, int(40 * s)), font, small_scale, motion_color, thick)
         
-        # Center: Distance
-        if distance_m > 0:
-            distance_text = f"Distance: {distance_m:.1f}m"
+        # Center: distance (big, horizontally centered) or "Geen signaal"
+        signal_valid = 0 < distance_m < 9999
+        if signal_valid:
+            distance_text = f"{distance_m:.0f}m"
             distance_color = (0, 0, 255) if alarm_active else (0, 255, 255)
-            cv2.putText(frame, distance_text, (self.width // 2 - 150, self.height // 2), 
-                       font, 1.2, distance_color, 3)
+        else:
+            distance_text = "Geen signaal"
+            distance_color = gray
+        distance_scale = 1.1 * min(s, 1.8)
+        (text_w, _), _ = cv2.getTextSize(distance_text, font, distance_scale, 3)
+        distance_x = max(4, (self.width - text_w) // 2)
+        distance_y = int(self.height * 0.55)
+        cv2.putText(frame, distance_text, (distance_x, distance_y),
+                    font, distance_scale, distance_color, 3)
         
-        # Bottom: Indicator lights
+        # Persistent "last detection" line above the indicator lights
+        if last_detection:
+            last_text = (f"Laatst: {last_detection['distance_m']:.0f}m @ "
+                         f"{last_detection['freq_mhz']:.3f} MHz "
+                         f"{last_detection['time']}")
+            (lw, _), _ = cv2.getTextSize(last_text, font, small_scale, thick)
+            last_x = max(8, (self.width - lw) // 2)
+            last_y = self.height - int(72 * s)
+            cv2.putText(frame, last_text, (last_x, last_y),
+                        font, small_scale, (0, 215, 255), thick)
+        
+        # Indicator lights (bottom, centered)
         self._draw_indicator_lights(frame, indicators)
         
-        # Bottom-right: Alarm status
+        # Alarm status: top-right (free since motion moved under the clock)
         if alarm_active:
-            cv2.putText(frame, "ALARM!", (self.width - 200, self.height - 30), 
-                       font, 1.2, (0, 0, 255), 3)
+            alarm_scale = 0.8 * s
+            (aw, _), _ = cv2.getTextSize("ALARM!", font, alarm_scale, 2)
+            cv2.putText(frame, "ALARM!", (self.width - aw - 8, int(20 * s)),
+                        font, alarm_scale, (0, 0, 255), 2)
 
     def _draw_indicator_lights(self, frame: np.ndarray, indicators: int, y_pos: Optional[int] = None):
         """
@@ -137,11 +168,11 @@ class DisplayHandler:
             y_pos: Y position (default: bottom)
         """
         if y_pos is None:
-            y_pos = self.height - 50
+            y_pos = self.height - int(25 * (self.width / 320.0))
         
-        light_radius = 20
-        spacing = 50
-        start_x = self.width // 2 - (6 * spacing // 2)
+        light_radius = int(11 * (self.width / 320.0))
+        spacing = int(25 * (self.width / 320.0))
+        start_x = self.width // 2 - 3 * spacing
         
         for i in range(6):
             x = start_x + i * spacing

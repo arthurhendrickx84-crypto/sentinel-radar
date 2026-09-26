@@ -3,8 +3,9 @@
 import numpy as np
 from rtlsdr import RtlSdr
 import logging
+import time
 from collections import deque
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Set
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,18 @@ class SDRHandler:
         self._scan_idx = 0
         self.detection_margin_db = detection_margin_db
         self._baselines = {f: deque(maxlen=10) for f in self.scan_freqs}
+        
+        # Mast filter: fixed base stations transmit nearly continuously on a
+        # frequency, mobile radios transmit in short bursts. Track carrier
+        # streaks and duty cycle per frequency and suppress "always-on"
+        # carriers so only mobile transmitters trigger alerts.
+        self.mast_hold_s = 12.0          # continuous carrier this long = mast
+        self.mast_duty_threshold = 0.8   # >80% of recent scans above baseline = mast
+        self._carrier_start: dict = {f: None for f in self.scan_freqs}
+        self._above_history = {f: deque(maxlen=40) for f in self.scan_freqs}
+        self._mast_flags: Set[int] = set()
+        self.mast_suppressed_count = 0
+        
         self.sdr: Optional[RtlSdr] = None
         self.is_connected = False
 
@@ -89,17 +102,23 @@ class SDRHandler:
         
         return rssi_dbm
 
-    def estimate_distance(self, rssi_dbm: float, tx_power_dbm: float = 30, 
-                         path_loss_exponent: float = 2.0) -> float:
+    def estimate_distance(self, rssi_dbm: float, tx_power_dbm: float = 33.0, 
+                         path_loss_exponent: float = 3.0) -> float:
         """
-        Estimate distance from RSSI using path loss model.
+        Estimate distance from RSSI using log-distance path loss model.
         
-        Formula: Distance = 10 ^ ((TxPower - RSSI) / (20 * N))
+        Formula: Distance = 10 ^ ((TxPower - RSSI) / (10 * N))
+        
+        Calibrated for C2000 mobile radios (vehicle sets / portofoons):
+        tx_power ~33 dBm (2 W), path loss exponent 3.0 (suburban terrain,
+        matches measured RSSIs during test rides). Base station downlink is
+        much stronger (~46 dBm) but those carriers are suppressed by the
+        mast filter before this model is used.
         
         Args:
             rssi_dbm: Received signal strength in dBm
-            tx_power_dbm: Transmitter power in dBm
-            path_loss_exponent: Path loss exponent (2.0 for free space)
+            tx_power_dbm: Mobile transmitter power in dBm
+            path_loss_exponent: Path loss exponent (3.0 suburban)
             
         Returns:
             Estimated distance in meters
@@ -132,7 +151,8 @@ class SDRHandler:
             rssi = self.get_rssi(samples)
             
             # Signal detection threshold (configurable via settings.json)
-            signal_detected = rssi > self.detection_threshold_dbm
+            signal_detected = rssi > self.detection_threshold_dbm and \
+                freq_hz not in self._mast_flags
             
             return rssi, signal_detected
         except Exception as e:
@@ -165,11 +185,43 @@ class SDRHandler:
             base = self._baselines[freq]
             base.append(rssi)
             
-            if len(base) >= 4:
-                baseline = float(np.median(base))
-                signal_detected = rssi > baseline + self.detection_margin_db
+            if len(base) < 4:
+                return rssi, False, freq  # baseline still warming up
+            
+            baseline = float(np.median(base))
+            is_above = rssi > baseline + self.detection_margin_db
+            
+            # --- Mast filter: carrier streak + duty cycle tracking ---
+            now = time.monotonic()
+            hist = self._above_history[freq]
+            hist.append(is_above)
+            
+            if is_above:
+                if self._carrier_start[freq] is None:
+                    self._carrier_start[freq] = now
+                streak_s = now - self._carrier_start[freq]
             else:
-                signal_detected = False  # baseline still warming up
+                self._carrier_start[freq] = None
+                streak_s = 0.0
+            
+            if len(hist) >= 10:
+                duty = sum(hist) / len(hist)
+                if duty >= self.mast_duty_threshold and freq not in self._mast_flags:
+                    self._mast_flags.add(freq)
+                    logger.info(f"Mast filter ON: {freq/1e6:.3f} MHz "
+                                f"duty cycle {duty:.0%} -> suppressed (base station)")
+                elif duty < 0.3 and freq in self._mast_flags:
+                    self._mast_flags.discard(freq)
+                    logger.info(f"Mast filter OFF: {freq/1e6:.3f} MHz "
+                                f"duty cycle {duty:.0%} -> mobile bursts possible again")
+            
+            mast_suspect = streak_s >= self.mast_hold_s or freq in self._mast_flags
+            
+            if is_above and mast_suspect:
+                self.mast_suppressed_count += 1
+                signal_detected = False
+            else:
+                signal_detected = is_above
             
             return rssi, signal_detected, freq
         except Exception as e:

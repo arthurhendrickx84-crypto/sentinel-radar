@@ -5,6 +5,7 @@ import sys
 import logging
 import json
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -17,6 +18,7 @@ from src.motion_detector import MotionDetector
 from src.alert_system import AlertSystem
 from src.display_handler import DisplayHandler
 from src.sound_alert import SoundAlert
+from src.csv_logger import CSVLogger
 
 # Setup logging
 logging.basicConfig(
@@ -48,12 +50,14 @@ class SentinelRadar:
         self.alert_system: Optional[AlertSystem] = None
         self.display: Optional[DisplayHandler] = None
         self.sound_alert: Optional[SoundAlert] = None
+        self.csv: Optional[CSVLogger] = None
         
         self.running = False
         self.last_alert_level = -1  # Track alert level changes for INFO logging
         self.last_distance_m = 9999.0   # Last valid distance, held between scans
         self.last_detect_time = 0.0     # Timestamp of last successful detection
-        self.signal_hold_s = 2.0        # Keep detection alive this long without new signal
+        self.signal_hold_s = 5.0        # Keep detection alive this long without new signal
+        self.last_detection_info = None # Last accepted burst, for the persistent display line
 
     def _load_config(self, config_file: str) -> dict:
         """Load configuration from JSON."""
@@ -136,6 +140,14 @@ class SentinelRadar:
             volume=self.config['sound']['volume']
         )
         
+        # Initialize CSV ride logger
+        log_cfg = self.config.get('logging', {})
+        self.csv = CSVLogger(
+            log_dir=log_cfg.get('csv_dir', '~/radar_logs'),
+            enabled=log_cfg.get('csv_enabled', True),
+            log_all_scans=log_cfg.get('log_all_scans', False)
+        )
+        
         logger.info("Initialization complete")
         return True
 
@@ -144,6 +156,7 @@ class SentinelRadar:
         self.running = True
         frame_count = 0
         scan_interval = 0.25  # Scan every 250ms (round-robin over scan frequencies)
+        max_distance_m = float(self.config['alerts'].get('distance_threshold_m', 500))
         last_scan_time = time.time()
         
         logger.info("Starting main loop...")
@@ -169,16 +182,33 @@ class SentinelRadar:
                 if current_time - last_scan_time >= scan_interval and self.sdr:
                     rssi, signal_detected, scanned_freq = self.sdr.scan_next()
 
+                    if self.csv:
+                        self.csv.log_scan(scanned_freq, rssi)
+
                     if signal_detected:
                         self.last_distance_m = self.sdr.estimate_distance(
                             rssi,
-                            tx_power_dbm=30,
-                            path_loss_exponent=2.0
+                            tx_power_dbm=33,
+                            path_loss_exponent=3.0
                         )
+                        # Only accept mobile transmitters within max range;
+                        # anything "farther" is noise or a slipping carrier
+                        if self.last_distance_m > max_distance_m:
+                            self.last_distance_m = 9999.0
                         self.last_detect_time = current_time
+                        self.last_detection_info = {
+                            'freq_mhz': scanned_freq / 1e6,
+                            'rssi_dbm': rssi,
+                            'distance_m': self.last_distance_m,
+                            'time': datetime.now().strftime('%H:%M:%S')
+                        }
                         logger.info(f"Signal burst: {rssi:.1f} dBm @ "
                                     f"{scanned_freq/1e6:.3f} MHz -> "
                                     f"~{self.last_distance_m:.0f}m")
+                        if self.csv:
+                            self.csv.log_burst(scanned_freq, rssi,
+                                               self.last_distance_m,
+                                               accepted=self.last_distance_m <= max_distance_m)
                     elif current_time - self.last_detect_time > self.signal_hold_s:
                         # No signal for longer than the hold window: reset
                         self.last_distance_m = 9999.0
@@ -204,6 +234,10 @@ class SentinelRadar:
                                     f"(distance {status['distance_m']:.0f}m, "
                                     f"sound_alarm: {self.alert_system.should_sound_alarm()})")
                         self.last_alert_level = current_level
+                        if self.csv:
+                            self.csv.log_alert(current_level,
+                                               status['distance_m'],
+                                               self.alert_system.should_sound_alarm())
                 
                 # Render and display frame
                 if self.display and self.alert_system:
@@ -212,7 +246,8 @@ class SentinelRadar:
                         distance_m=distance_m,
                         indicators=self.alert_system.current_level.indicators if self.alert_system.current_level else 0,
                         alarm_active=self.alert_system.should_sound_alarm(),
-                        motion_detected=motion_detected
+                        motion_detected=motion_detected,
+                        last_detection=self.last_detection_info
                     )
                     
                     if display_frame is not None:
@@ -237,6 +272,8 @@ class SentinelRadar:
         """Cleanup resources."""
         logger.info("Cleaning up...")
         
+        if self.csv:
+            self.csv.close()
         if self.sdr:
             self.sdr.disconnect()
         if self.camera:

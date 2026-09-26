@@ -78,20 +78,21 @@ class TelegramAlert:
         if now - self._last_sent[level] < cooldown:
             return  # suppressed by cooldown
 
-        parts = [f"{icon} Sentinel: hulpdienstvoertuig {level}",
-                 f"Afstand ~{distance_m:.0f} m"]
-        if trend:
-            parts.append(f"trend: {trend}")
-        if freq_mhz > 0:
-            parts.append(f"kanaal {freq_mhz:.3f} MHz")
-        if bursts:
-            parts.append(f"{bursts}x actief")
-        text = "\n".join(parts)
+        # Compact single line, optimized for Siri announcement:
+        # no emoji (Siri reads emoji descriptions aloud), no unit
+        # symbols, no channel details (those live in the CSV).
+        # Example: "Sentinel: rood, 40 meter, nadert"
+        level_word = "rood" if level == "red" else "oranje"
+        trend_word = {"dichterbij": "nadert",
+                      "verder": "verwijdert"}.get(trend, "stabiel") if trend else ""
+        text = f"Sentinel: {level_word}, {distance_m:.0f} meter"
+        if trend_word:
+            text += f", {trend_word}"
 
         self._last_sent[level] = now
         with self._lock:
             self._queue.append((now, text))
-        logger.info(f"Telegram queued ({level}): {parts[1]}")
+        logger.info(f"Telegram queued ({level}): {text}")
 
     # ------------------------------------------------------------------
     def _run_worker(self):

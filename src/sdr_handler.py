@@ -3,7 +3,8 @@
 import numpy as np
 from rtlsdr import RtlSdr
 import logging
-from typing import Optional, Tuple
+from collections import deque
+from typing import Optional, Tuple, List
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +13,9 @@ class SDRHandler:
     """Manages RTL-SDR dongle for frequency scanning and signal detection."""
 
     def __init__(self, center_freq: int, sample_rate: int = 2400000, gain: str = "auto",
-                 detection_threshold_dbm: float = -40.0):
+                 detection_threshold_dbm: float = -40.0,
+                 scan_frequencies: Optional[List[int]] = None,
+                 detection_margin_db: float = 6.0):
         """
         Initialize SDR handler.
         
@@ -20,13 +23,20 @@ class SDRHandler:
             center_freq: Center frequency in Hz
             sample_rate: Sample rate in Hz
             gain: Gain setting ('auto' or dB value)
-            detection_threshold_dbm: RSSI in dBm above which a signal counts as detected
-                                     (configurable via settings.json: sdr.detection_threshold_dbm)
+            detection_threshold_dbm: Absolute fallback threshold in dBm
+            scan_frequencies: List of frequencies to round-robin scan. If None,
+                              only center_freq is scanned.
+            detection_margin_db: Burst must exceed the per-frequency noise
+                                 baseline by this many dB to count as detected
         """
         self.center_freq = center_freq
         self.sample_rate = sample_rate
         self.gain = gain
         self.detection_threshold_dbm = detection_threshold_dbm
+        self.scan_freqs: List[int] = scan_frequencies if scan_frequencies else [center_freq]
+        self._scan_idx = 0
+        self.detection_margin_db = detection_margin_db
+        self._baselines = {f: deque(maxlen=10) for f in self.scan_freqs}
         self.sdr: Optional[RtlSdr] = None
         self.is_connected = False
 
@@ -128,6 +138,43 @@ class SDRHandler:
         except Exception as e:
             logger.error(f"Error scanning frequency: {e}")
             return -100.0, False
+
+    def scan_next(self) -> Tuple[float, bool, int]:
+        """
+        Scan the next frequency round-robin with adaptive baseline detection.
+        
+        Each frequency keeps a rolling noise baseline (median of recent reads).
+        A signal counts as detected when the current RSSI exceeds
+        baseline + detection_margin_db — so passing transmitters stand out
+        while constant beacons and noise floors do not.
+        
+        Returns:
+            Tuple of (rssi_dbm, signal_detected, scanned_freq_hz)
+        """
+        if not self.is_connected or self.sdr is None:
+            return -100.0, False, 0
+        
+        freq = self.scan_freqs[self._scan_idx % len(self.scan_freqs)]
+        self._scan_idx += 1
+        
+        try:
+            self.sdr.center_freq = freq
+            samples = self.sdr.read_samples(16384)
+            rssi = self.get_rssi(samples)
+            
+            base = self._baselines[freq]
+            base.append(rssi)
+            
+            if len(base) >= 4:
+                baseline = float(np.median(base))
+                signal_detected = rssi > baseline + self.detection_margin_db
+            else:
+                signal_detected = False  # baseline still warming up
+            
+            return rssi, signal_detected, freq
+        except Exception as e:
+            logger.error(f"Error scanning {freq/1e6:.3f} MHz: {e}")
+            return -100.0, False, freq
 
     def disconnect(self):
         """Disconnect from SDR."""

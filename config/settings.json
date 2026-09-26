@@ -8,6 +8,8 @@
     "sample_rate": 1024000,
     "gain": 30,
     "detection_threshold_dbm": -75,
+    "detection_margin_db": 6,
+    "scan_frequencies": [420400000, 420200000, 420700000, 390700000, 391100000, 393900000],
     "ppm_error": 0,
     "bandwidth": 2500000
   },

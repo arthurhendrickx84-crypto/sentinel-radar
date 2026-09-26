@@ -94,7 +94,9 @@ class SentinelRadar:
             center_freq=primary_freq,
             sample_rate=self.config['sdr']['sample_rate'],
             gain=self.config['sdr']['gain'],
-            detection_threshold_dbm=self.config['sdr'].get('detection_threshold_dbm', -40.0)
+            detection_threshold_dbm=self.config['sdr'].get('detection_threshold_dbm', -40.0),
+            scan_frequencies=self.config['sdr'].get('scan_frequencies'),
+            detection_margin_db=self.config['sdr'].get('detection_margin_db', 6.0)
         )
         
         if not self.sdr.connect():
@@ -141,7 +143,7 @@ class SentinelRadar:
         """Main application loop."""
         self.running = True
         frame_count = 0
-        scan_interval = 0.5  # Scan every 500ms
+        scan_interval = 0.25  # Scan every 250ms (round-robin over scan frequencies)
         last_scan_time = time.time()
         
         logger.info("Starting main loop...")
@@ -165,11 +167,8 @@ class SentinelRadar:
                 # Scan RF periodically; hold the last valid distance between
                 # scans so display and alerts don't flicker on and off
                 if current_time - last_scan_time >= scan_interval and self.sdr:
-                    rssi, signal_detected = self.sdr.scan_frequency(
-                        self.sdr.center_freq,
-                        duration_s=0.1
-                    )
-                    
+                    rssi, signal_detected, scanned_freq = self.sdr.scan_next()
+
                     if signal_detected:
                         self.last_distance_m = self.sdr.estimate_distance(
                             rssi,
@@ -177,6 +176,9 @@ class SentinelRadar:
                             path_loss_exponent=2.0
                         )
                         self.last_detect_time = current_time
+                        logger.info(f"Signal burst: {rssi:.1f} dBm @ "
+                                    f"{scanned_freq/1e6:.3f} MHz -> "
+                                    f"~{self.last_distance_m:.0f}m")
                     elif current_time - self.last_detect_time > self.signal_hold_s:
                         # No signal for longer than the hold window: reset
                         self.last_distance_m = 9999.0

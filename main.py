@@ -51,6 +51,9 @@ class SentinelRadar:
         
         self.running = False
         self.last_alert_level = -1  # Track alert level changes for INFO logging
+        self.last_distance_m = 9999.0   # Last valid distance, held between scans
+        self.last_detect_time = 0.0     # Timestamp of last successful detection
+        self.signal_hold_s = 2.0        # Keep detection alive this long without new signal
 
     def _load_config(self, config_file: str) -> dict:
         """Load configuration from JSON."""
@@ -159,8 +162,8 @@ class SentinelRadar:
                         if motion_detected:
                             frame = self.motion_detector.draw_contours(frame)
                 
-                # Scan RF periodically
-                distance_m = 9999
+                # Scan RF periodically; hold the last valid distance between
+                # scans so display and alerts don't flicker on and off
                 if current_time - last_scan_time >= scan_interval and self.sdr:
                     rssi, signal_detected = self.sdr.scan_frequency(
                         self.sdr.center_freq,
@@ -168,13 +171,19 @@ class SentinelRadar:
                     )
                     
                     if signal_detected:
-                        distance_m = self.sdr.estimate_distance(
+                        self.last_distance_m = self.sdr.estimate_distance(
                             rssi,
                             tx_power_dbm=30,
                             path_loss_exponent=2.0
                         )
+                        self.last_detect_time = current_time
+                    elif current_time - self.last_detect_time > self.signal_hold_s:
+                        # No signal for longer than the hold window: reset
+                        self.last_distance_m = 9999.0
                     
                     last_scan_time = current_time
+                
+                distance_m = self.last_distance_m
                 
                 # Update alert system
                 if self.alert_system:
@@ -191,7 +200,7 @@ class SentinelRadar:
                         logger.info(f"Alert level change: {self.last_alert_level} -> "
                                     f"{current_level} indicators "
                                     f"(distance {status['distance_m']:.0f}m, "
-                                    f"alarm: {status['alert_active']})")
+                                    f"sound_alarm: {self.alert_system.should_sound_alarm()})")
                         self.last_alert_level = current_level
                 
                 # Render and display frame
